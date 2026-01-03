@@ -1,0 +1,164 @@
+# Example configurations for different deployment scenarios
+
+# ============================================================================
+# EXAMPLE 1: Development Environment (Minimal)
+# ============================================================================
+# helm install baufi helm-chart/ -f values-examples.yaml -k development
+
+development:
+  replicaCount: 1
+
+  image:
+    registry: ghcr.io
+    repository: yourusername/baufi-optimierer
+    tag: latest
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+  persistence:
+    enabled: true
+    size: 500Mi
+
+  ingress:
+    enabled: false  # Use port-forward for dev
+
+
+# ============================================================================
+# EXAMPLE 2: Staging Environment (HA Ready)
+# ============================================================================
+# helm install baufi helm-chart/ -f values-examples.yaml -k staging
+
+staging:
+  replicaCount: 2
+
+  image:
+    registry: ghcr.io
+    repository: yourusername/baufi-optimierer
+    tag: v1.0.0
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: standard
+
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: staging.mortgage-optimizer.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: staging-tls
+        hosts:
+          - staging.mortgage-optimizer.example.com
+
+
+# ============================================================================
+# EXAMPLE 3: Production Environment (Full HA)
+# ============================================================================
+# helm install baufi helm-chart/ -f values-examples.yaml -k production
+
+production:
+  replicaCount: 3
+
+  image:
+    registry: ghcr.io
+    repository: yourusername/baufi-optimierer
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+
+  imagePullSecrets:
+    - name: ghcr-secret
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 500m
+      memory: 256Mi
+
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: fast-ssd
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/rate-limit: "100"
+    hosts:
+      - host: mortgage-optimizer.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: baufi-optimierer-tls
+        hosts:
+          - mortgage-optimizer.example.com
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  nodeSelector:
+    workload: apps
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - baufi-optimierer
+            topologyKey: kubernetes.io/hostname
+
+
+# ============================================================================
+# EXAMPLE 4: External Backend API
+# ============================================================================
+# If your backend API is running separately (not in this cluster)
+
+externalBackend:
+  backend:
+    apiUrl: "https://api.mortgage-optimizer.example.com"
+    apiPath: /api
+
+
+# ============================================================================
+# EXAMPLE 5: Local Backend in Same Cluster
+# ============================================================================
+# If backend API is deployed as another Kubernetes service
+
+localBackend:
+  backend:
+    apiUrl: "http://backend-service.default.svc.cluster.local:3000"
+    apiPath: /api

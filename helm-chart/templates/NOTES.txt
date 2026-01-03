@@ -1,0 +1,54 @@
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+  https://{{ index .Values.ingress.hosts 0 "host" }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "baufi-optimierer.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "baufi-optimierer.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "baufi-optimierer.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "baufi-optimierer.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+
+2. Watch the deployment status:
+  kubectl get deployment --namespace {{ .Release.Namespace }} -w {{ include "baufi-optimierer.fullname" . }}
+
+3. Check the logs:
+  kubectl logs --namespace {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "baufi-optimierer.name" . }}
+
+4. Ingress Configuration:
+{{- if .Values.ingress.enabled }}
+  An Ingress has been created with TLS enabled via cert-manager.
+  Make sure your domain ({{ index .Values.ingress.hosts 0 "host" }}) DNS is pointing to your Ingress Controller.
+  TLS certificate will be automatically provisioned by cert-manager.
+{{- else }}
+  To enable Ingress, set ingress.enabled=true in your values or use:
+  helm upgrade {{ .Release.Name }} baufi-optimierer --set ingress.enabled=true
+{{- end }}
+
+5. Persistence:
+{{- if .Values.persistence.enabled }}
+  SQLite database is stored in a PersistentVolumeClaim ({{ include "baufi-optimierer.fullname" . }}).
+  Data will persist across pod restarts.
+  Storage Class: {{ .Values.persistence.storageClass | default "default" }}
+  Size: {{ .Values.persistence.size }}
+{{- else }}
+  Persistence is disabled. Data will be lost on pod restart.
+{{- end }}
+
+6. Backend API Configuration:
+  API Path: {{ .Values.backend.apiPath }}
+{{- if .Values.backend.apiUrl }}
+  Backend URL: {{ .Values.backend.apiUrl }}
+{{- else }}
+  Backend is proxied locally (configure your backend service location).
+{{- end }}
+
+For more information, visit the project repository or check the Helm values documentation.

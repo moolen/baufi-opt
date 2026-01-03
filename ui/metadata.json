@@ -1,0 +1,5 @@
+{
+  "name": "Baufinanzierungs-Optimierer",
+  "description": "Verwaltung von Immobilienkrediten mit Simulation von Sondertilgungen und Berechnung der Zinsersparnis.",
+  "requestFramePermissions": []
+}
