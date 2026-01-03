@@ -53,13 +53,6 @@ persistence:
   size: 1Gi
   mountPath: /app/data
 
-# Backend API configuration
-backend:
-  # URL path for backend API (relative to the app domain)
-  apiPath: /api
-  # Optional: absolute backend URL (if different domain)
-  # apiUrl: "https://api.example.com"
-
 # Security
 securityContext:
   runAsNonRoot: true

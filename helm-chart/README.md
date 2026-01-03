@@ -73,27 +73,6 @@ helm install baufi helm-chart/ --set persistence.storageClass=fast-ssd
 # Disable persistence (not recommended for production)
 helm install baufi helm-chart/ --set persistence.enabled=false
 
-# Enable auto-scaling
-helm install baufi helm-chart/ \
-  --set autoscaling.enabled=true \
-  --set autoscaling.minReplicas=2 \
-  --set autoscaling.maxReplicas=5
-```
-
-### Backend Configuration
-
-If your backend is running in the same cluster:
-
-```bash
-helm install baufi helm-chart/ \
-  --set backend.apiUrl="http://backend-service.default.svc.cluster.local:3000"
-```
-
-If using relative path (local reverse proxy):
-
-```bash
-helm install baufi helm-chart/ \
-  --set backend.apiPath=/api
 ```
 
 ## Upgrade

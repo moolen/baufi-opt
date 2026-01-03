@@ -13,8 +13,6 @@ spec:
       {{- include "baufi-optimierer.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         {{- include "baufi-optimierer.selectorLabels" . | nindent 8 }}
     spec:
@@ -49,17 +47,11 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx/conf.d
-              readOnly: true
             {{- if .Values.persistence.enabled }}
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}
             {{- end }}
       volumes:
-        - name: nginx-config
-          configMap:
-            name: {{ include "baufi-optimierer.fullname" . }}-nginx
         {{- if .Values.persistence.enabled }}
         - name: data
           persistentVolumeClaim:

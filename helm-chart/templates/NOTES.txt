@@ -43,12 +43,3 @@
   Persistence is disabled. Data will be lost on pod restart.
 {{- end }}
 
-6. Backend API Configuration:
-  API Path: {{ .Values.backend.apiPath }}
-{{- if .Values.backend.apiUrl }}
-  Backend URL: {{ .Values.backend.apiUrl }}
-{{- else }}
-  Backend is proxied locally (configure your backend service location).
-{{- end }}
-
-For more information, visit the project repository or check the Helm values documentation.
