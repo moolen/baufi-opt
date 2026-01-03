@@ -178,8 +178,8 @@ jobs:
       - name: Update Helm chart version
         if: steps.check_version.outputs.exists == 'false'
         run: |
-          sed -i "s/version: .*/version: ${{ steps.version.outputs.version_without_v }}/\" helm-chart/Chart.yaml
-          sed -i "s/appVersion: .*/appVersion: \"${{ steps.version.outputs.version_without_v }}\"/\" helm-chart/Chart.yaml
+          sed -i "s/version: .*/version: ${{ steps.version.outputs.version_without_v }}/" helm-chart/Chart.yaml
+          sed -i "s/appVersion: .*/appVersion: \"${{ steps.version.outputs.version_without_v }}\"/" helm-chart/Chart.yaml
 
       - name: Package and push Helm chart as OCI artifact
         if: steps.check_version.outputs.exists == 'false'
