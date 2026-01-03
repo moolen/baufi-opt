@@ -1,0 +1,77 @@
+name: Build and Push Container & Helm Chart
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "image-version=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/baufi-optimierer:${{ steps.version.outputs.image-version }}
+            ghcr.io/${{ github.repository_owner }}/baufi-optimierer:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+
+      - name: Update Helm chart version
+        run: |
+          sed -i "s/version: .*/version: ${{ steps.version.outputs.image-version }}/" helm-chart/Chart.yaml
+          sed -i "s/appVersion: .*/appVersion: \"${{ steps.version.outputs.image-version }}\"/" helm-chart/Chart.yaml
+
+      - name: Package and push Helm chart as OCI artifact
+        run: |
+          # Package the Helm chart
+          helm package helm-chart/ --destination /tmp
+
+          # Push to OCI registry
+          helm registry login ghcr.io \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GITHUB_TOKEN }}
+
+          helm push /tmp/baufi-optimierer-${{ steps.version.outputs.image-version }}.tgz \
+            oci://ghcr.io/${{ github.repository_owner }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: /tmp/baufi-optimierer-${{ steps.version.outputs.image-version }}.tgz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

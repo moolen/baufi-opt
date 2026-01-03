@@ -1,0 +1,163 @@
+name: Create Release with Semantic Versioning
+
+on:
+  push:
+    branches:
+      - master
+    # Don't trigger on tag pushes (avoid infinite loop with build-and-push workflow)
+    tags-ignore:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git log analysis
+
+      - name: Get previous tag
+        id: previoustag
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            echo "tag=v1.0.0" >> $GITHUB_OUTPUT
+            echo "first_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+            echo "first_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get commits since last tag
+        id: commits
+        run: |
+          if [ "${{ steps.previoustag.outputs.first_release }}" = "true" ]; then
+            COMMIT_LOG=$(git log --oneline --no-decorate)
+          else
+            COMMIT_LOG=$(git log --oneline --no-decorate ${{ steps.previoustag.outputs.tag }}..HEAD)
+          fi
+          echo "log<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_LOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          COMMITS="${{ steps.commits.outputs.log }}"
+
+          # Check for breaking changes (BREAKING CHANGE or BREAKING:)
+          if echo "$COMMITS" | grep -qi "breaking"; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          # Check for features (feat:)
+          elif echo "$COMMITS" | grep -q "^feat"; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          # Default to patch for fixes and other commits
+          else
+            echo "type=patch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Calculate new version
+        id: version
+        run: |
+          CURRENT_VERSION="${{ steps.previoustag.outputs.tag }}"
+          BUMP_TYPE="${{ steps.bump.outputs.type }}"
+
+          # Remove 'v' prefix for processing
+          VERSION=${CURRENT_VERSION#v}
+
+          # Parse version parts
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+
+          # Bump version based on type
+          case $BUMP_TYPE in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_without_v=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          COMMITS="${{ steps.commits.outputs.log }}"
+
+          NOTES="## What's Changed"
+          NOTES="$NOTES"$'\n'
+
+          # Parse conventional commits and group them
+          BREAKING=$(echo "$COMMITS" | grep -i "^.*BREAKING" | sed 's/^/- /' || echo "")
+          FEATURES=$(echo "$COMMITS" | grep "^feat" | sed 's/^feat[:\(]*//g' | sed 's/^/- /' || echo "")
+          FIXES=$(echo "$COMMITS" | grep "^fix" | sed 's/^fix[:\(]*//g' | sed 's/^/- /' || echo "")
+          OTHER=$(echo "$COMMITS" | grep -v "^feat\|^fix\|BREAKING" | sed 's/^/- /' || echo "")
+
+          if [ -n "$BREAKING" ]; then
+            NOTES="$NOTES"$'\n'"### 🚨 Breaking Changes"$'\n'"$BREAKING"$'\n'
+          fi
+
+          if [ -n "$FEATURES" ]; then
+            NOTES="$NOTES"$'\n'"### ✨ Features"$'\n'"$FEATURES"$'\n'
+          fi
+
+          if [ -n "$FIXES" ]; then
+            NOTES="$NOTES"$'\n'"### 🐛 Bug Fixes"$'\n'"$FIXES"$'\n'
+          fi
+
+          if [ -n "$OTHER" ]; then
+            NOTES="$NOTES"$'\n'"### 📝 Other Changes"$'\n'"$OTHER"$'\n'
+          fi
+
+          # Save to file for use in release creation
+          echo "$NOTES" > /tmp/release_notes.md
+          cat /tmp/release_notes.md
+
+      - name: Check if version already exists
+        id: check_version
+        run: |
+          if git rev-parse "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip if version already exists
+        if: steps.check_version.outputs.exists == 'true'
+        run: |
+          echo "Version ${{ steps.version.outputs.version }} already exists. Skipping release creation."
+          exit 0
+
+      - name: Create git tag
+        if: steps.check_version.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.version.outputs.version }} -m "Release ${{ steps.version.outputs.version }}"
+          git push origin ${{ steps.version.outputs.version }}
+
+      - name: Create GitHub Release
+        if: steps.check_version.outputs.exists == 'false'
+        run: |
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "Release ${{ steps.version.outputs.version }}" \
+            --notes-file /tmp/release_notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
