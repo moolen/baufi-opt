@@ -1,10 +1,10 @@
-name: Create Release with Semantic Versioning
+name: Release - Build, Push & Create Release
 
 on:
   push:
     branches:
       - master
-    # Don't trigger on tag pushes (avoid infinite loop with build-and-push workflow)
+    # Don't trigger on tag pushes (avoid infinite loop)
     tags-ignore:
       - 'v*'
 
@@ -13,7 +13,7 @@ permissions:
   packages: write
 
 jobs:
-  create-release:
+  release:
     runs-on: ubuntu-latest
 
     steps:
@@ -142,8 +142,58 @@ jobs:
       - name: Skip if version already exists
         if: steps.check_version.outputs.exists == 'true'
         run: |
-          echo "Version ${{ steps.version.outputs.version }} already exists. Skipping release creation."
+          echo "Version ${{ steps.version.outputs.version }} already exists. Skipping release."
           exit 0
+
+      - name: Set up Docker Buildx
+        if: steps.check_version.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: steps.check_version.outputs.exists == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container image
+        if: steps.check_version.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/baufi-optimierer:${{ steps.version.outputs.version_without_v }}
+            ghcr.io/${{ github.repository_owner }}/baufi-optimierer:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set up Helm
+        if: steps.check_version.outputs.exists == 'false'
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+
+      - name: Update Helm chart version
+        if: steps.check_version.outputs.exists == 'false'
+        run: |
+          sed -i "s/version: .*/version: ${{ steps.version.outputs.version_without_v }}/\" helm-chart/Chart.yaml
+          sed -i "s/appVersion: .*/appVersion: \"${{ steps.version.outputs.version_without_v }}\"/\" helm-chart/Chart.yaml
+
+      - name: Package and push Helm chart as OCI artifact
+        if: steps.check_version.outputs.exists == 'false'
+        run: |
+          # Package the Helm chart
+          helm package helm-chart/ --destination /tmp
+
+          # Push to OCI registry
+          helm registry login ghcr.io \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GITHUB_TOKEN }}
+
+          helm push /tmp/baufi-optimierer-${{ steps.version.outputs.version_without_v }}.tgz \
+            oci://ghcr.io/${{ github.repository_owner }}
 
       - name: Create git tag
         if: steps.check_version.outputs.exists == 'false'
@@ -158,6 +208,7 @@ jobs:
         run: |
           gh release create ${{ steps.version.outputs.version }} \
             --title "Release ${{ steps.version.outputs.version }}" \
-            --notes-file /tmp/release_notes.md
+            --notes-file /tmp/release_notes.md \
+            /tmp/baufi-optimierer-${{ steps.version.outputs.version_without_v }}.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
