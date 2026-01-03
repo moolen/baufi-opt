@@ -37,6 +37,20 @@ const (
 
 // initTables creates all necessary tables and indexes
 func initTables() error {
+	// Configure SQLite for proper persistence and concurrency
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL;",           // Write-Ahead Logging for better concurrency
+		"PRAGMA synchronous = FULL;",            // Ensure writes are synced to disk
+		"PRAGMA foreign_keys = ON;",             // Enable foreign key constraints
+		"PRAGMA temp_store = MEMORY;",           // Use memory for temporary tables
+	}
+
+	for _, pragma := range pragmas {
+		if _, err := DB.Exec(pragma); err != nil {
+			return err
+		}
+	}
+
 	statements := []string{
 		createLoansTable,
 		createSpecialPaymentsTable,
@@ -47,11 +61,6 @@ func initTables() error {
 		if _, err := DB.Exec(stmt); err != nil {
 			return err
 		}
-	}
-
-	// Enable foreign key constraints
-	if _, err := DB.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		return err
 	}
 
 	return nil

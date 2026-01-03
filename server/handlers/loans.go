@@ -11,7 +11,7 @@ import (
 	"baufi-optimierer/server/models"
 )
 
-// HandleGetAllLoans returns all loans without special payment details
+// HandleGetAllLoans returns all loans with their special payment details
 func HandleGetAllLoans(w http.ResponseWriter, r *http.Request) {
 	loans, err := db.GetAllLoans()
 	if err != nil {

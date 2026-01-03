@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -30,11 +31,19 @@ func main() {
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "./data/loans.db"
+		// Use absolute path relative to the binary location
+		// This ensures the database file is always in the same location regardless of cwd
+		exePath, err := os.Executable()
+		if err != nil {
+			log.Fatalf("Failed to get executable path: %v", err)
+		}
+		exeDir := filepath.Dir(exePath)
+		dbPath = filepath.Join(exeDir, "data", "loans.db")
 	}
 
 	// Ensure data directory exists
-	if err := os.MkdirAll("./data", 0755); err != nil && !os.IsExist(err) {
+	dataDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dataDir, 0755); err != nil && !os.IsExist(err) {
 		log.Fatalf("Failed to create data directory: %v", err)
 	}
 

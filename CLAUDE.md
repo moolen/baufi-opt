@@ -46,7 +46,7 @@ npm run preview    # Preview the built app locally
 
 ### Data Flow
 
-1. User creates/edits loans in `LoanForm` → stored in `App.tsx` state → saved to `localStorage`
+1. User creates/edits loans in `LoanForm` → stored in `App.tsx` state -> stored via /api/loans API in the database.
 2. Selected loan flows through `useMemo` calculations in `App.tsx`
 3. Calculations feed into chart and table components for visualization
 4. Special payments trigger recalculation of impacts via `calculatePaymentImpact()`
@@ -104,6 +104,5 @@ npm run preview    # Preview the built app locally
 
 ## Testing & Debugging
 
-- Browser DevTools: Inspect `localStorage` under Application tab to see stored loans
 - Vite dev server provides HMR (hot module reload) for instant feedback
 - `React.StrictMode` in `index.tsx` helps catch side-effect issues in development

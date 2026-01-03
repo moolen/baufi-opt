@@ -9,7 +9,7 @@ import (
 
 // Loans queries
 
-// GetAllLoans retrieves all loans without special payments
+// GetAllLoans retrieves all loans with their special payments
 func GetAllLoans() ([]models.Loan, error) {
 	rows, err := queryRows(`
 		SELECT id, name, amount, interest_rate, start_date, fixed_interest_years,
@@ -35,9 +35,16 @@ func GetAllLoans() ([]models.Loan, error) {
 			return nil, err
 		}
 
-		loan.SpecialPayments = []models.SpecialPayment{}
 		loan.CreatedAt = createdAt
 		loan.UpdatedAt = updatedAt
+
+		// Get special payments for this loan
+		payments, err := GetSpecialPayments(loan.ID)
+		if err != nil {
+			return nil, err
+		}
+		loan.SpecialPayments = payments
+
 		loans = append(loans, loan)
 	}
 
@@ -95,6 +102,10 @@ func CreateLoan(loan *models.Loan) error {
 		loan.CreatedAt = now
 		loan.UpdatedAt = now
 		loan.SpecialPayments = []models.SpecialPayment{}
+		// Force WAL checkpoint to ensure data is persisted
+		if err := forceCheckpoint(); err != nil {
+			return fmt.Errorf("failed to checkpoint database: %w", err)
+		}
 	}
 	return err
 }
@@ -199,14 +210,25 @@ func CreateSpecialPayment(payment *models.SpecialPayment) error {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Convert empty note to nil for proper NULL insertion
+	var noteValue *string
+	if payment.Note != "" {
+		noteValue = &payment.Note
+	}
+
 	_, err := execQuery(`
 		INSERT INTO special_payments (id, loan_id, date, amount, note, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, payment.ID, payment.LoanID, payment.Date, payment.Amount, payment.Note, now, now)
+	`, payment.ID, payment.LoanID, payment.Date, payment.Amount, noteValue, now, now)
 
 	if err == nil {
 		payment.CreatedAt = now
 		payment.UpdatedAt = now
+		// Force WAL checkpoint to ensure data is persisted
+		if err := forceCheckpoint(); err != nil {
+			return fmt.Errorf("failed to checkpoint database: %w", err)
+		}
 	}
 	return err
 }

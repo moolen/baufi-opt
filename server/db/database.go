@@ -84,3 +84,12 @@ func queryRows(query string, args ...interface{}) (*sql.Rows, error) {
 	}
 	return DB.Query(query, args...)
 }
+
+// forceCheckpoint forces a WAL checkpoint to persist pending writes to disk
+func forceCheckpoint() error {
+	if logDB {
+		log.Println("QUERY: PRAGMA wal_checkpoint(RESTART)")
+	}
+	_, err := DB.Exec("PRAGMA wal_checkpoint(RESTART)")
+	return err
+}
