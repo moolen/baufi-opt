@@ -174,7 +174,7 @@ func GetSpecialPayments(loanID string) ([]models.SpecialPayment, error) {
 	}
 	defer rows.Close()
 
-	var payments []models.SpecialPayment
+	payments := []models.SpecialPayment{}
 	for rows.Next() {
 		var payment models.SpecialPayment
 		var createdAt, updatedAt string
